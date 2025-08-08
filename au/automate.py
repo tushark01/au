@@ -19,6 +19,57 @@ from get_pre_url import generate_presigned_url
 from zip_utils import get_latest_zip_filename, get_pdf_files_from_s3
 
 load_dotenv()
+
+import subprocess
+import sys
+from pathlib import Path
+
+@st.cache_resource
+def install_playwright_on_first_run():
+    """Install Playwright browsers on first app load - cached to avoid repeated installs"""
+    
+    # Check if browsers are already installed
+    playwright_cache = Path.home() / ".cache" / "ms-playwright"
+    chromium_dirs = list(playwright_cache.glob("chromium-*")) if playwright_cache.exists() else []
+    
+    if chromium_dirs:
+        st.success("✅ Playwright browsers already installed!")
+        return True
+    
+    # Install browsers if not found
+    try:
+        with st.spinner("🎭 Installing Playwright browsers... This may take 1-2 minutes on first deployment."):
+            
+            # Install Chromium browser
+            result = subprocess.run([
+                sys.executable, "-m", "playwright", "install", "chromium"
+            ], capture_output=True, text=True, check=True)
+            
+            # Try to install system dependencies (may fail on Streamlit Cloud but worth trying)
+            try:
+                subprocess.run([
+                    sys.executable, "-m", "playwright", "install-deps", "chromium"
+                ], capture_output=True, text=True, check=True)
+            except subprocess.CalledProcessError:
+                # Dependencies might fail, but browsers can still work
+                pass
+                
+        st.success("✅ Playwright browsers installed successfully!")
+        return True
+        
+    except subprocess.CalledProcessError as e:
+        st.error(f"❌ Failed to install Playwright browsers: {e.stderr}")
+        st.info("💡 Consider using Selenium as an alternative for better deployment compatibility.")
+        return False
+
+# Call this before your app logic starts
+if 'playwright_ready' not in st.session_state:
+    st.session_state['playwright_ready'] = install_playwright_on_first_run()
+
+if not st.session_state['playwright_ready']:
+    st.error("⚠️ Cannot run automation without Playwright browsers")
+    st.stop()
+
 st.set_page_config(page_title="GFGC Drafter-CoPilot", page_icon="🤖", layout="centered")
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
